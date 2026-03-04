@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
 local Cam = workspace.CurrentCamera
 
@@ -11,10 +12,13 @@ local Config = {
     Radius = 0, 
     ShowLine = false,
     ShowBox = false,
-    ShowHealth = false
+    ShowHealth = false,
+    AimKill = false
 }
 
 local ESP_Store = {}
+local KillAuraConnection = nil
+local SecurityKey = "0196b45d"
 
 local function GetESP(plr)
     if not ESP_Store[plr] then
@@ -53,6 +57,43 @@ local function GetClosestPlayer()
     return target
 end
 
+local function StartKillAura()
+    if KillAuraConnection then KillAuraConnection:Disconnect() end
+    KillAuraConnection = RunService.Heartbeat:Connect(function()
+        if not Config.AimKill then return end
+        pcall(function()
+            for _, enemy in pairs(workspace:FindFirstChild("Enemies") or {}) do
+                local hrp = enemy:FindFirstChild("HumanoidRootPart")
+                local hum = enemy:FindFirstChild("Humanoid")
+                local LPChar = LP.Character
+                if LPChar and hrp and hum and hum.Health > 0 then
+                    local LPhrp = LPChar:FindFirstChild("HumanoidRootPart")
+                    if LPhrp and (hrp.Position - LPhrp.Position).Magnitude < 50 then
+                        local args = {
+                            [1] = enemy:FindFirstChild("LeftHand") or hrp,
+                            [2] = {},
+                            [4] = SecurityKey
+                        }
+                        local regHit = ReplicatedStorage:FindFirstChild("Modules") and 
+                                      ReplicatedStorage.Modules:FindFirstChild("Net") and 
+                                      ReplicatedStorage.Modules.Net:FindFirstChild("RE/RegisterHit")
+                        if regHit then
+                            regHit:FireServer(unpack(args))
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+local function StopKillAura()
+    if KillAuraConnection then
+        KillAuraConnection:Disconnect()
+        KillAuraConnection = nil
+    end
+end
+
 if CoreGui:FindFirstChild("NgHuy_RBL") then CoreGui.NgHuy_RBL:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -71,10 +112,10 @@ FOVCircle.Transparency = 1
 FOVCircle.Filled = false
 FOVCircle.Visible = false
 
--- Panel chính
+-- Panel chính (tăng chiều cao để chứa thêm nút Aim Kill)
 local Panel = Instance.new("Frame", ScreenGui)
-Panel.Size = UDim2.new(0, 300, 0, 260)
-Panel.Position = UDim2.new(0.5, -150, 0.5, -130)
+Panel.Size = UDim2.new(0, 300, 0, 300)
+Panel.Position = UDim2.new(0.5, -150, 0.5, -150)
 Panel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 Panel.BackgroundTransparency = 0.1
 Panel.BorderSizePixel = 0
@@ -82,17 +123,15 @@ Panel.Active = true
 Panel.Draggable = true
 Panel.Visible = false
 
--- Bo góc panel
 local PanelCorner = Instance.new("UICorner", Panel)
 PanelCorner.CornerRadius = UDim.new(0, 10)
 
--- Viền panel
 local PanelStroke = Instance.new("UIStroke", Panel)
 PanelStroke.Color = Color3.fromRGB(0, 170, 255)
 PanelStroke.Thickness = 2
 PanelStroke.Transparency = 0.3
 
--- Header với tên menu
+-- Header
 local Header = Instance.new("Frame", Panel)
 Header.Size = UDim2.new(1, 0, 0, 35)
 Header.Position = UDim2.new(0, 0, 0, 0)
@@ -112,7 +151,7 @@ Title.Font = SELECTED_FONT
 Title.TextSize = 18
 Title.TextScaled = true
 
--- Tạo menu icon
+-- Menu icon
 local MenuIcon = Instance.new("ImageButton", ScreenGui)
 MenuIcon.BackgroundTransparency = 0.3
 MenuIcon.Position = UDim2.new(0.02, 0, 0.5, -25)
@@ -164,7 +203,7 @@ local function CreateToggle(posX, posY, text, callback)
     Checkmark.Size = UDim2.new(1, -6, 1, -6)
     Checkmark.Position = UDim2.new(0, 3, 0, 3)
     Checkmark.BackgroundTransparency = 1
-    Checkmark.Image = "rbxassetid://3926305904" -- Icon checkmark
+    Checkmark.Image = "rbxassetid://3926305904"
     Checkmark.ImageColor3 = Color3.fromRGB(0, 255, 0)
     Checkmark.Visible = false
     Checkmark.BackgroundColor3 = Color3.new(1,1,1)
@@ -196,7 +235,7 @@ CreateToggle(155, 50, "HITBOX", function(state)
     Config.Hitbox = state
 end)
 
--- Dòng 2: ESP
+-- Dòng 2: ESP LINE, ESP BOX
 CreateToggle(15, 95, "ESP LINE", function(state)
     Config.ShowLine = state
 end)
@@ -205,14 +244,24 @@ CreateToggle(155, 95, "ESP BOX", function(state)
     Config.ShowBox = state
 end)
 
+-- Dòng 3: ESP HP và AIM KILL
 CreateToggle(15, 140, "ESP HP", function(state)
     Config.ShowHealth = state
 end)
 
--- Dòng 3: AIM RADIUS slider
+CreateToggle(155, 140, "AIM KILL", function(state)
+    Config.AimKill = state
+    if state then
+        StartKillAura()
+    else
+        StopKillAura()
+    end
+end)
+
+-- Dòng 4: AIM RADIUS slider (đã dời xuống)
 local RadiusLabel = Instance.new("TextLabel", Panel)
 RadiusLabel.Size = UDim2.new(0, 130, 0, 25)
-RadiusLabel.Position = UDim2.new(0, 15, 0, 185)
+RadiusLabel.Position = UDim2.new(0, 15, 0, 190)
 RadiusLabel.BackgroundTransparency = 1
 RadiusLabel.Text = "AIM RADIUS: 0"
 RadiusLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -222,7 +271,7 @@ RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local SliderFrame = Instance.new("Frame", Panel)
 SliderFrame.Size = UDim2.new(0, 250, 0, 8)
-SliderFrame.Position = UDim2.new(0, 15, 0, 215)
+SliderFrame.Position = UDim2.new(0, 15, 0, 220)
 SliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 SliderFrame.BorderSizePixel = 0
 
@@ -237,7 +286,6 @@ SliderFill.BorderSizePixel = 0
 local SliderFillCorner = Instance.new("UICorner", SliderFill)
 SliderFillCorner.CornerRadius = UDim.new(0, 4)
 
--- Tạo knob là ImageButton để bắt sự kiện tốt hơn
 local SliderKnob = Instance.new("ImageButton", SliderFrame)
 SliderKnob.Size = UDim2.new(0, 16, 0, 16)
 SliderKnob.Position = UDim2.new(0, -8, 0.5, -8)
@@ -253,8 +301,12 @@ KnobCorner.CornerRadius = UDim.new(1, 0)
 local dragging = false
 local dragConnection = nil
 
--- Hàm cập nhật slider
 local function updateSliderFromMouse(mousePos)
+    if not Panel.Visible then
+        -- Nếu menu tắt, dừng kéo
+        dragging = false
+        return
+    end
     local absX = SliderFrame.AbsolutePosition.X
     local absWidth = SliderFrame.AbsoluteSize.X
     local relativeX = math.clamp(mousePos.X - absX, 0, absWidth)
@@ -270,17 +322,19 @@ end
 
 -- Bắt đầu kéo
 SliderKnob.MouseButton1Down:Connect(function()
+    if not Panel.Visible then return end
     dragging = true
     
-    -- Tạo connection tạm thời để theo dõi chuột
     if dragConnection then
         dragConnection:Disconnect()
     end
     
     dragConnection = RunService.RenderStepped:Connect(function()
-        if dragging then
+        if dragging and Panel.Visible then
             local mousePos = UserInputService:GetMouseLocation()
             updateSliderFromMouse(mousePos)
+        else
+            dragging = false
         end
     end)
 end)
@@ -296,11 +350,11 @@ end)
 
 -- Click trực tiếp lên thanh slider
 SliderFrame.InputBegan:Connect(function(input)
+    if not Panel.Visible then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         local mousePos = UserInputService:GetMouseLocation()
         updateSliderFromMouse(mousePos)
         
-        -- Bắt đầu kéo ngay sau khi click
         dragging = true
         
         if dragConnection then
@@ -308,9 +362,11 @@ SliderFrame.InputBegan:Connect(function(input)
         end
         
         dragConnection = RunService.RenderStepped:Connect(function()
-            if dragging then
+            if dragging and Panel.Visible then
                 local mousePos = UserInputService:GetMouseLocation()
                 updateSliderFromMouse(mousePos)
+            else
+                dragging = false
             end
         end)
     end
@@ -325,11 +381,6 @@ UserInputService.InputEnded:Connect(function(input)
             dragConnection = nil
         end
     end
-end)
-
--- Xử lý khi rời khỏi knob
-SliderKnob.MouseLeave:Connect(function()
-    -- Không làm gì, giữ nguyên trạng thái kéo
 end)
 
 -- Player count display
