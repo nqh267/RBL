@@ -420,7 +420,7 @@ RunService.RenderStepped:Connect(function()
             local p_hum = plr.Character.Humanoid
             
             if Config.Hitbox then
-                p_hrp.Size = Vector3.new(15, 15, 15)
+                p_hrp.Size = Vector3.new(50, 50, 50)
                 p_hrp.Transparency = 0.7
                 p_hrp.Color = Color3.fromRGB(255, 0, 0)
                 p_hrp.CanCollide = false
